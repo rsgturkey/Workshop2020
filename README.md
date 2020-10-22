@@ -19,8 +19,14 @@ RSG Turkey Student Symposium 2020 - Workshop Session
 - H. Melike Dönertaş, European Molecular Biology Laboratory, EBI
 - Ulaş Işıldak, Department of Biological Sciences, METU
 
+## Before the workshop
+We will use the R environment through **RStudio**, so it is important that you have both R and RStudio installed on your personal 
+computers to follow along the practical examples. [Here](https://www.datacamp.com/community/tutorials/installing-R-windows-mac-ubuntu)
+is a comprehensive guide for installing both programs under Windows, macOS or GNU/Linux. Please contact etka at etka.yapar@gmail.com
+for possible problems you encounter during installation process before the first session of the workshop.
+
 ## Course material
-The slides and codes used during the lectures will be made available right before the lectures.
+The slides and/or codes used during the lectures will be made available once edited and structured after the sessions.
 
 ## Program
 
