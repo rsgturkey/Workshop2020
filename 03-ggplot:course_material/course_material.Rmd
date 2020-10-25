@@ -1,0 +1,699 @@
+---
+title: "Data visualisation using ggplot"
+subtitle: "RSG Turkey Student Symposium 2020 - Workshop"
+author: "Melike Donertas"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Data visualisation
+
+Data visualisation, in short, is the graphical representation of the data. More on data visualisation principles, and effective figure design can be found in our previous years' [workshop material](https://mdonertas.github.io/ScientificFigureDesign). Today we will focus on practical aspects and how to create figures using `ggplot2` library in R. 
+
+# What is ggplot / grammar of graphics?
+
+**Grammar of graphics:** The grammar used to create a wide range of graphs. `ggplot` implements a layered grammar of graphics so that layers are combined to build the final graph which can be unique in many ways. 
+
+## Tidyverse and tidy data
+
+* ggplot is a package included in "tidyverse" and works well with "tidy data". The tidyverse is a group of R packages that help data anlysis. The core tidyverse includes:
+
+* ggplot2: to visualize data
+* tidyr: to tidy data
+* readr: to read / import data
+* dplyr: to manipulate data
+* tibble: tweaked data frames to make life easier
+* purrr: a functional programming toolkit
+
+To install the tidyverse package:
+
+```{r, eval = F}
+install.packages("tidyverse")
+```
+
+Tidy data concept deserves its own workshop but for now, it's important to know that there are three characteristics of tidy data:
+
+1. Each variable must have its own column.
+1. Each observation must have its own row.
+1. Each value must have its own cell.
+
+For example, the dataset you used in the previous sessions "processeddata.csv" is a nice example to tidy data. I will thus read it using `read_csv` from `readr` package, which is a part of `tidyverse`.
+
+```{r}
+library(tidyverse)
+covid = read_csv('https://raw.githubusercontent.com/rsgturkey/Workshop2020/master/02-Intro_to_ML/data/processeddata.csv')
+head(covid)
+```
+
+This dataset is an example of a tidy dataset because, each column shows a variable, observations are not splitted between rows, and each value has its own cell. For example, the following is exactly the same data but structured differently and it is not a 'tidy dataset'.
+
+```{r,echo = T}
+covid_nottidy = covid %>%
+  mutate(location = paste(latitude, longitude, sep= ' | ')) %>%
+  select(-latitude, -longitude) %>%
+  gather(key = 'type', value = 'value',-outcome, -location) %>%
+  select(outcome, type, value, location)
+```
+
+```{r}
+head(covid_nottidy)
+```
+Here, variables 'age' and 'sex' are both entered under 'value' column, and thus each observation is represented with two rows. Location includes data for both latitude and longitude. This data for sure is difficult to work with. Nevertheless, we will continue with `covid` and other tidy data examples and I suggest that learning basic data wrangling and manipulation functions in tidyverse such as `spread`, `gather`, `filter`, `select`, and `mutate` worth checking. Just to make the following steps easier I will further modify the data so that outcome and sex columns are of factor type not character. This could've been done while reading the data with `read_csv`, but to examplify the use of `mutate` function, I will use it here: 
+
+```{r}
+covid = covid %>% 
+  mutate(outcome = as.factor(outcome),
+         sex = as.factor(sex))
+head(covid)
+```
+
+## Basic ggplot syntax 
+
+There are three basic components of plots: data, aesthetics and geoms. Aesthetics provide the mapping between variables in data and visual properties, and geoms provide the layers describing how to render each observation. 
+
+Let's start with the `covid` data and see how these components function:
+
+```{r}
+ggplot(data = covid, aes(x = outcome, y = age)) +
+  geom_boxplot()
+```
+
+This is a graph with the most basic components. `outcome` variable of `covid` data is *mapped* to x, and `age` is mapped to y axes and the data is layered as a boxplot. It is also possible to create a similar figure using base R, and some may actually prefer that: 
+
+```{r}
+boxplot(age ~ outcome, data = covid)
+```
+
+The issue with base R is that it is straightforward for basic figures but as you want to create complex figures with many layers and modify its aesthetics, it is very time consuming. Let's modify our boxplot a little bit to add more layers:
+
+```{r}
+ggplot(data = covid, aes(x = outcome, y = age)) +
+  geom_boxplot() +
+  geom_jitter()
+```
+
+Just to treat our eyes better, we can do the following relatively easy. And today we will cover individual aspects of how to do it. 
+
+```{r}
+ggplot(data = covid, aes( x = outcome, y = age, fill = outcome)) +
+  geom_boxplot(outlier.shape = NA) +
+  ggforce::geom_sina(size = 0.5, alpha = 0.3, color = 'gray45') + 
+  ggthemes::scale_fill_pander() +
+  xlab(NULL) + ylab('Age (in years)') + guides(fill = F) +
+  theme_bw() +
+  ggpubr::stat_compare_means(comparisons = list(c('Died','Recovered')), 
+                             label = 'p.signif')
+```
+
+By the way, just keep in mind that the examples are to show how ggplot works, not to provide the best examples of data visualisation. 
+
+Let's see in more detail how to map other variables using other aesthetics such as color, shape and size. 
+
+```{r}
+ggplot(data = covid, aes(x = longitude, y = latitude, color = age, shape = sex, 
+                         size = outcome)) +
+  geom_point()
+```
+Here I used size for a discrete variable and it gives a warning as it is better to be used with quantitative variables. Here each variable is encoded with a different channel (x, y axes, shape, color, and size). 
+
+If you want to make all points a particular color but not mapped to a variable, that's done outside `aes` function:
+
+```{r}
+ggplot(data = covid, aes(x = longitude, y = latitude, shape = sex, size = outcome)) +
+  geom_point( color = 'darkred')
+```
+
+let's see the difference here: 
+
+```{r}
+ggplot(data = covid, aes(x = longitude, y = latitude, color = 'darkred', 
+                         shape = sex, size = outcome)) +
+  geom_point( )
+```
+
+Here we mapped the color to 'darkred' but did not fix its value. 
+
+Another way to display categorical data is through faceting. Facets create plots for each category separately. Let's say we want to visualise the first plot outcome vs. age again as a boxplot but we want to create separate graphs for different sexes. 
+
+```{r}
+ggplot(data = covid, aes(x = outcome, y = age)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(size = 0.3, alpha = 0.3, width = 0.1) +
+  facet_wrap(~sex)
+```
+
+Here the argument `alpha` sets the transparency, size sets the size of the points and width determines the amount of jitter. Just to emphasize again, this is not a good representation of the data but only a handy example. 
+
+Lastly, I want to show how to modify axes limits and labels and add a title to the plot:
+
+```{r}
+ggplot(data = covid, aes(x = outcome, y = age)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(size = 0.3, alpha = 0.3, width = 0.1) +
+  facet_wrap(~sex) +
+  xlab('Patient Outcome') +
+  ylab('Age (in years)') + 
+  ggtitle('Age distributions stratified by Outcome and Sex') +
+  ylim(0,125) 
+```
+Let's save this figure as a pdf file, using `ggsave`. And just as you can save other R objects, you can save ggplot objects. It is always useful to save the object instead of just the pdf version as you can further modify it. 
+
+```{r}
+myplot = ggplot(data = covid, aes(x = outcome, y = age)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(size = 0.3, alpha = 0.3, width = 0.1) +
+  facet_wrap(~sex) +
+  xlab('Patient Outcome') +
+  ylab('Age (in years)') + 
+  ggtitle('Age distributions stratified by Outcome and Sex') +
+  ylim(0,125) 
+
+ggsave('./figures/age_by_sex_and_outcome.pdf', myplot, 
+       units = 'cm', width = 16, height = 10, useDingbats = F)
+saveRDS(myplot, 'data/myplot.rds')
+```
+
+Let's now load this file again and change it's theme, let's say because we decided to use another theme in our manuscript.
+
+```{r}
+myplot_loaded = readRDS('./data/myplot.rds')
+myplot_new = myplot_loaded +
+  theme_bw()
+myplot_new
+```
+
+Now instead of the default theme, we use a different one. More on themes will come in the future sections. Now we know the basics. Let's have a look at different types of plots and how to combine them to have visually appealing figures. 
+
+# Layers
+
+3 purposes of layers: 
+
+* Show data
+* Show statistical summary of the data (generally on top of the data layer).
+* Add metadeta (annotations, references, or background information - like a world map)
+
+## geoms
+
+Geoms are the building blocks of ggplot figures. They are generally named after the type of figure they create - e.g. `geom_area` for area plot, `geom_bar` for bar plot - but they can further be *combined* to create more complex graphics. 
+
+To better exemplify the following geoms, we will use `mtcars` data available in R. 
+
+```{r}
+p = ggplot(mtcars, aes(x = wt, y = mpg))
+```
+
+### geom_point
+
+`geom_point` creates a scatterplot. 
+
+```{r}
+p + geom_point()
+```
+
+### geom_text
+
+Let's display the model of cars instead of points: 
+
+```{r}
+p + geom_text(aes(label = rownames(mtcars)))
+```
+
+Another similar function is `geom_label` which draws a rectangle behind the text and could look better when you do not have many labels.
+
+```{r}
+p + geom_label(aes(label = rownames(mtcars)))
+```
+
+One evident issue in both `geom_text` and `geom_label` is the overlapping texts. To avoid it we can use ggrepel package.
+
+```{r}
+library(ggrepel)
+p + geom_text_repel(aes(label = rownames(mtcars)))
+```
+
+Since the text is 'repelled', we should also plot the points to see where each one is actually located:
+
+```{r}
+p + geom_text_repel(aes(label = rownames(mtcars))) +
+  geom_point()
+```
+
+### geom_line
+
+```{r}
+p + geom_line()
+```
+
+```{r}
+p + geom_point() + geom_line()
+```
+
+### geom_bar
+
+```{r}
+ggplot(covid, aes(x = sex)) +
+  geom_bar()
+```
+
+By default, `geom_bar` can calculate the number of observations in each category. However, let's imagine a case where you do not have the data itself but just the summary including the count data, like the following: 
+
+```{r}
+sexcount = covid %>%
+  group_by(sex) %>%
+  summarise(n = n())
+sexcount
+```
+
+In this case, we need to map the variable `n` to y-axis. However, we also need to change the `stat` argument in `geom_bar` otherwise it would give an error as it would try to calculate the y axis variable itself. 
+
+```{r}
+ggplot(sexcount, aes(x = sex, y= n)) +
+  geom_bar(stat = 'identity')
+```
+
+We can also use fill color in `geom_bar`. In order to have a better example, I will modify our covid data to have age groups:
+
+```{r}
+covid_agegr = covid %>%
+  mutate(agegr = cut(age, breaks = seq(0,100,by=10)))
+head(covid_agegr)
+```
+
+Now we will color by the sex. 
+
+```{r}
+ggplot(covid_agegr, aes(x = agegr, fill = sex)) +
+  geom_bar()
+```
+
+I used `fill` instead of `color`, because in `geom_bar`, color controls the color of the line around the rectangles. 
+
+```{r}
+ggplot(covid_agegr, aes(x = agegr, color = sex)) +
+  geom_bar()
+```
+
+Let's go back to using `fill`, but also instead of having the bars for different sexes stacked, I want to have them side by side. For this, we can use `position = 'dodge'`. 
+
+```{r}
+ggplot(covid_agegr, aes(x = agegr, fill = sex)) +
+  geom_bar(position = 'dodge')
+```
+
+Another value `position` argument can take is `'fill'`. In this case, the sum of each age group will be equal and in a way, the colors will show the proportion of sexes in each age group.
+
+```{r}
+ggplot(covid_agegr, aes(x = agegr, fill = sex)) +
+  geom_bar(position = 'fill')
+```
+
+And please don't consider using pie charts much (for details please see [data_viz workshop notes](https://mdonertas.github.io/ScientificFigureDesign/different-types-of-plots.html#pie-chart)) but just to show how flexible ggplot is, we can use `geom_bar(position = 'fill')` with `coord_polar` function (changing the coordinates to polar coordinate system) and have pie charts:
+
+```{r}
+ggplot(covid_agegr, aes(fill = sex, x = '')) +
+  geom_bar(position = 'fill') + 
+  facet_wrap(~agegr) +
+  coord_polar('y', start = 0) + 
+  theme_void()
+```
+
+### geom_histogram
+
+Instead of age groups, if we show the distribution of the continuous variable age with a histogram: 
+
+```{r}
+ggplot(covid, aes(x = age)) +
+  geom_histogram(color = 'gray')
+```
+
+### geom_boxplot
+
+To have a boxplot, we use `geom_boxplot`. An important point is the variable on the x-axis should not be a continuous variable.
+
+```{r}
+ggplot(covid, aes( x = outcome, y = age)) +
+  geom_boxplot()
+```
+
+### geom_violin
+
+Violin plot is similar to a boxplot and a density plot. It looks like a density plot turned horizontally. We can draw lines for the quantiles using `draw_quantiles` argument.
+
+```{r}
+ggplot(covid, aes( x = outcome, y = age)) +
+  geom_violin(draw_quantiles = c(0.25,0.5,0.75))
+```
+
+### geom_*line
+
+We can use `geom_*line` functions to add horizontal and vertical lines. To examplify use of these functions: 
+
+```{r}
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  xlim(0,6) +
+  ylim(0,35) +
+  geom_hline(yintercept = 25, color = 'red') +
+  geom_vline(xintercept = 3, color = 'blue') +
+  geom_abline(intercept = 0, slope = 5, size = 2, 
+              color = 'gray', linetype = 'dashed')
+```
+
+## Custom annotations - `annotate`
+
+When the annotations (text, lines, segments etc.) are not mapped from the data but are custom annotations, it is more convenient to use `annotate` function:
+
+```{r}
+ggplot(covid, aes( x = outcome, y = age)) +
+  geom_violin(draw_quantiles = c(0.25,0.5,0.75)) +
+  annotate(geom = 'text', x = 1, y = 65, label = 'median') +
+  annotate(geom = 'segment', x = 1, xend = 2, y = 110, yend = 110) +
+  annotate(geom = 'text', x = 1.5, y = 115, label = 'p<XXX')
+```
+
+## Other annotations
+
+When you want to add p-value annotations, it is actually more straightforward to use `stat_compare_means` function in `ggpubr` library: 
+
+```{r}
+library(ggpubr)
+ggplot(covid, aes( x = outcome, y = age)) +
+  geom_violin(draw_quantiles = c(0.25,0.5,0.75)) +
+  stat_compare_means()
+```
+
+If you want it to display the p-value similar to our annotation example, use `comparisons` argument. Also, instead of using wilcoxon, we can use t.test. If we want to show the p value significance levels instead of the pvalues, we can use `label = 'p.signif'`.
+
+```{r}
+library(ggpubr)
+ggplot(covid, aes( x = outcome, y = age)) +
+  geom_violin(draw_quantiles = c(0.25,0.5,0.75)) +
+  stat_compare_means(comparisons = list(c('Died','Recovered')),
+                     method = 't.test', label = 'p.signif')
+```
+
+When there are multiple groups, but you want the comparison to be against only one of the groups:
+
+```{r}
+ggplot(mtcars, aes(x = factor(cyl), y = mpg)) +
+  geom_boxplot() +
+  stat_compare_means(ref.group = '4')
+```
+
+It is important to note that these are nominal p-values that are not corrected for multiple testing. Lastly, apart from binary comparisons it is possible to calculate the p value for Kruskal-Wallis or ANOVA test when there are multiple groups: 
+
+```{r}
+ggplot(mtcars, aes(x = factor(cyl), y = mpg)) +
+  geom_boxplot() +
+  stat_compare_means()
+```
+
+Another visually appealing group of functions for annotations are `geom_mark_*` functions: 
+
+```{r}
+library(ggforce)
+ggplot(mtcars , aes(x = disp, y = mpg)) +
+  geom_point() +
+  geom_mark_ellipse(aes(group = cyl, label = cyl)) 
+```
+
+Lastly, when you want to highlight a group of observations while showing all other observations as a background, `gghighlight` function from the package with the same name is useful:
+
+```{r}
+library(gghighlight)
+ggplot(mtcars , aes(x = disp, y = mpg, color = factor(cyl))) +
+  geom_point() +
+  gghighlight() +
+  facet_wrap(~cyl)
+```
+
+There are other use cases as well. I suggest checking the functions in these packages and functions in more detail for nice plots.
+
+# Scales
+
+## Position and axes
+
+`scale_x_*` and `scale_y_*` functions are used to change the scale of the axes. 
+
+```{r}
+p1 = ggplot(mtcars, aes(x = disp, y = mpg)) +
+  geom_point() 
+p2 = ggplot(mtcars, aes(x = disp, y = mpg)) +
+  geom_point() +
+  scale_x_log10()
+p3 = ggplot(mtcars, aes(x = disp, y = mpg)) +
+  geom_point() +
+  scale_x_reverse()
+p4 = ggplot(mtcars, aes(x = disp, y = mpg)) +
+  geom_point() +
+  scale_y_sqrt()
+ggarrange(p1,p2,p3,p4, ncol = 2, nrow = 2)
+```
+
+You can also use `scale_x_continous` function with the `trans` argument to set your own transformation. Also using these scaling functions you can change the labels on the axes:
+
+```{r}
+ggplot(mtcars, aes(x = disp, y = mpg)) +
+  geom_point() +
+  scale_y_continuous(breaks = seq(10,40,by = 3),
+                     labels = seq(10,40,by = 3))
+```
+
+Here, we've shown the values with the increments of 3. There is also a package called `scales` where you can find furhter formatting functions such as `pvalue_format()`, `comma()`, `logit_trans()` which I use regularly. 
+
+## Color
+
+Let's go back to our previous example: 
+
+```{r}
+ggplot(covid, aes( x = outcome, y = age, fill = outcome)) +
+  geom_violin(draw_quantiles = c(0.25,0.5,0.75)) 
+```
+
+A straightforward way to change the colors is using `scale_fill_manual` function, which requires you to set the colors. Just as `scale_fill_*`, there are also `scale_color_*` functions to control the colors of the variables mapped with `fill` or `color`. 
+
+```{r}
+ggplot(covid, aes( x = outcome, y = age, fill = outcome)) +
+  geom_violin(draw_quantiles = c(0.25,0.5,0.75)) +
+  scale_fill_manual(values = c('gray', 'gold'))
+```
+
+You can also use color palettes such as `scale_fill_brewer`:
+
+```{r}
+ggplot(covid, aes( x = outcome, y = age, fill = outcome)) +
+  geom_violin(draw_quantiles = c(0.25,0.5,0.75))  +
+  scale_fill_brewer(type = 'qual', palette = 1)
+```
+
+Here you can set whether your palette type should be qualitative (qual), divergent (div), or sequential (seq) and set which palette you want. 
+
+There are even more color schemes in the `ggthemes` package, such as google docs theme (`scale_color_gdocs`)
+
+```{r}
+library(ggthemes)
+ggplot(covid, aes( x = outcome, y = age, color = sex)) +
+  geom_sina(alpha = 0.5, size = 0.3)  +
+  geom_violin(draw_quantiles = c(0.25,0.5,0.75), fill = NA)  +
+  scale_color_gdocs() 
+```
+
+Let's also see how to modify the legend: 
+
+```{r}
+library(ggthemes)
+ggplot(covid, aes( x = outcome, y = age, color = sex)) +
+  geom_sina(alpha = 0.5, size = 0.3)  +
+  geom_violin(draw_quantiles = c(0.25,0.5,0.75), fill = NA)  +
+  scale_color_gdocs() +
+  guides(color = guide_legend('Sex', 
+                              override.aes = list(alpha = 1, shape = 15, 
+                                                  size = 3, linetype = c(1,0)))) 
+```
+
+Here alpha argument controls the transparency. We changed the shape from a point to a rectangle using `shape = 15`, increased the size, and also we set the linetype to 0 for 'male' so that the legend showing the lines for the violin plot are not drawn in the legend. 
+
+# Themes
+
+Let's load the plot we created in the first part and change its theme. I extensively use `theme_pubr()` from `ggpubr` package for my figures: 
+
+```{r}
+library(ggpubr)
+readRDS('./data/myplot.rds') +
+  theme_pubr()
+```
+
+or try another, minimalist theme:
+
+```{r}
+readRDS('./data/myplot.rds') +
+  theme_tufte()
+```
+
+Let's try some other themes as well. 
+
+```{r, fig.width=10}
+p = ggplot(covid_agegr, aes(x = agegr, fill = sex)) +
+  geom_bar() +
+  xlab('Age Group') +
+  guides(fill = guide_legend('Sex')) +
+  scale_fill_wsj()
+p
+p + theme_base()
+p + theme_wsj()
+```
+
+
+Lastly, it is possible to further modify the theme using many arguments of the `theme` function. For example, let's change the position of the legend and also remove the major gridlines for the y-axis: 
+
+```{r}
+p + theme(legend.position = 'top',
+        panel.grid.minor.y = element_blank())
+```
+
+
+# Publication ready figures
+
+So far we just focused on learning different functionalities and didn't care much about data visualization principles or aesthetics. Now using `mtcars` dataset, we will create a figure that is ready to be sent for a publication. If you want you can create a publication ready figure using the covid dataset and your results from the previous session and share them in the slack channel to get feedback or ask your questions afterwards. 
+
+Let's have a look at this dataset more closely. 
+
+```{r}
+str(mtcars)
+```
+
+This data is with 32 observations spanning 11 variables. 
+
+* [, 1]	mpg	Miles/(US) gallon
+* [, 2]	cyl	Number of cylinders
+* [, 3]	disp	Displacement (cu.in.)
+* [, 4]	hp	Gross horsepower
+* [, 5]	drat	Rear axle ratio
+* [, 6]	wt	Weight (1000 lbs)
+* [, 7]	qsec	1/4 mile time
+* [, 8]	vs	Engine (0 = V-shaped, 1 = straight)
+* [, 9]	am	Transmission (0 = automatic, 1 = manual)
+* [,10]	gear	Number of forward gears
+* [,11]	carb	Number of carburetors
+
+All variables are encoded as numeric but actually some of them are categorical, such as number of cylinders (cyl), engine (vs - v-shaped or straight), transmission (am - automatic or manual), and the number of forward gears (gear - 3,4,5).
+
+Without making any changes in the data, let's explore it a little bit. Here I will use `ggpairs` function from `GGally` package, which is an amazing function to explore the trends between different variables easily: 
+
+```{r, fig.width=15, fig.height=15}
+GGally::ggpairs(mtcars)
+```
+
+I will first set my theme. I do this at the beginning of all my projects so that my theme is the same and consistent across plots in the same publication. In this way I won't need to add `+ theme_pubr()` for my figures.
+
+```{r}
+theme_set(theme_pubr(base_size = 10, legend = 'bottom'))
+```
+
+Here, `base_size` controls the base font size and `legend` sets the default position of the legend. 
+
+Another important point that most ggplot users ignore is the text font you set inside `geom_text` or `geom_label` is not the font size you think of. But it is possible to still use it to set the font size in pt. We need to use a coefficient to make this conversion.
+
+```{r}
+ptcoef <- 0.352777778
+```
+
+
+Now, I will start with a figure showing the correlation between the weight and mpg (miles per gallon) - but I will also use the number of cylinders. 
+
+```{r}
+p1 = mtcars %>%
+  mutate(cyl = as.factor(cyl)) %>%
+  ggplot(aes( x = wt, y = mpg, color = cyl)) +
+  geom_point( size = 2 ) +
+  geom_smooth(method = 'lm', aes(fill = cyl)) +
+  scale_color_gdocs()+
+  scale_fill_gdocs()+
+  xlab('Weight (1000 lbs)')+ ylab ('Miles per gallon')+
+  stat_cor(aes(color = cyl),method = 'spearman',
+           cor.coef.name = 'rho',
+           label.x = 3.5,
+           label.y=c(31,29,27), show.legend = F,
+           size = 8*ptcoef) +
+  guides(color = guide_legend('Number of\nCylinders', override.aes = list(fill = 'white')),
+         fill = F) + 
+  theme(legend.position = c(0.9,0.8))
+p1
+```
+
+Here, I used the `ptcoef` variable I created to make sure the font size is 8 pts. 
+
+Here we moved the legend to inside of the plot using `legend.position` argument. By playing with the numbers supplied, you can figure out how this argument works. 
+
+```{r}
+p2 = mtcars %>%
+  mutate(cyl = as.factor(cyl)) %>%
+  ggplot(aes(x=cyl,y=qsec,fill=cyl))+
+  geom_violin()+
+  geom_boxplot(width = 0.1, fill = 'white') + 
+  scale_fill_gdocs()+
+  xlab('Number of cylinders')+ ylab('1/4 mile time')+
+  stat_compare_means(comparisons = list(c('4','6'),c('6','8'),c('4','8')),
+                     method='wilcox.test',label = "p.signif")+ # Add pairwise comparisons p-value
+  stat_compare_means(label.y = 14.5,method='kruskal.test', size = 8*ptcoef) + 
+  theme(legend.position = c(0.9,0.8)) +
+  ylim(14,26)
+p2
+```
+
+Lastly, I will create a bar plot showing the mpgs per model. I will first re-arrange the order of names so that they will be ordered by first the number of cylinders and then the value of mpg. For this I will use `mutate` and `arrange` functions from `tidyverse`. 
+
+```{r}
+p3 = mtcars %>%
+  mutate(name = as.factor(rownames(mtcars)), 
+         cyl = as.factor(cyl)) %>%
+  arrange(cyl,-mpg) %>%
+  mutate(name = factor(name, levels = unique(name))) %>%
+  ggplot(aes(x = name, y = mpg, fill = cyl)) +
+  geom_bar(stat = 'identity') +
+  scale_fill_gdocs() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = c(0.8,0.9),
+        legend.direction = 'horizontal') +
+  xlab(NULL) +
+  ylab('Miles per Gallon')
+p3
+```
+
+Here we also changed the angle of the x-axis text within `theme` function. Here `vjust = 0.5` aligns the text to the axis ticks (it actually centers the text), and `hjust = 1` right-aligns the text. 
+
+Let's now create a figure with multiple panels to combine these. For this we will use `ggarrange` from `ggpubr` package:
+
+```{r,fig.height=6}
+ggarrange(p1,p2,p3, labels = 'auto', common.legend = T)
+```
+
+Not too bad, but not ideal either. 
+
+```{r,fig.height=6}
+p = ggarrange(ggarrange(p1,p2, labels = 'auto', common.legend = T, ncol = 2,nrow=1, legend = 'right'),
+          p3, labels = c(NA,'c'), nrow = 2, ncol =1, legend = 'none')
+p
+```
+
+Lastly, let's save this image to send for a publication:
+
+```{r}
+ggsave('./figures/fig1.pdf', p, useDingbats = F, units = 'cm', width = 16, height = 14)
+ggsave('./figures/fig1.png', p, units = 'cm', width = 16, height = 14)
+```
+
+When I save figures that will appear in just one column, I use `width = 8` and for the full-width figures I generally use `width = 16` but for most journals this value can be up to `16.8`. If you create a figure using the exact size it will appear on a journal, you can make sure the font sizes will remain as you set them. Please don't forget that even if the journal is available only in a digital format, they'd ask generally for a minimum font size of 6pts. 
+
+# Other plots and packages for visualisation
+
+Finally, I want to give a list of packages that you can explore for different types of special cases:
+
+* For networks: `ggnet2` or `ggnetwork`
+* Trees: `ggtree`
+* Heatmaps: for simple cases `pheatmap` and for more complicated cases `ComplexHeatmap`
+* Circular plots, circos plots etc: `circlize`
+
+
+
